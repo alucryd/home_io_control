@@ -99,9 +99,22 @@ class MockRadio : public esphome::home_io_control::RadioDriver {
       this->populate_capture_base_(true, packet.freq_hz, -55, packet.data, packet.len, packet.data, packet.len);
     return true;
   }
+  /// Delivers from the same queue as wait_for_packet(), because on real hardware both are just
+  /// "is a frame available" — the blocking one only adds the waiting. Returning false
+  /// unconditionally made this mock unusable for anything that polls rather than blocks, which is
+  /// how RadioDualSX1276 fans two receivers in.
   bool check_for_packet(esphome::home_io_control::RadioRxPacket &packet) override {
-    (void) packet;
-    return false;
+    if (rx_queue_.empty())
+      return false;
+    std::optional<esphome::home_io_control::RadioRxPacket> entry = rx_queue_.front();
+    rx_queue_.pop_front();
+    if (!entry.has_value()) {
+      return false;  // Queued silence, same meaning as in wait_for_packet(): nothing this pass.
+    }
+    packet = *entry;
+    if (emulate_capture_lifecycle_)
+      this->populate_capture_base_(true, packet.freq_hz, -55, packet.data, packet.len, packet.data, packet.len);
+    return true;
   }
   void change_frequency(uint32_t freq_hz) override {
     freq_history_.push_back(freq_hz);

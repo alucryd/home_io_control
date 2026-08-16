@@ -15,6 +15,7 @@
 #include "hub_internal.h"
 
 #include "radio_sx1276.h"
+#include "radio_dual_sx1276.h"
 #include "radio_sx1262.h"
 #include "radio_lr1121.h"
 #include "tuning_config.h"
@@ -134,6 +135,30 @@ void IOHomeControlComponent::setup() {
 // "sx1262", or "sx1276" — the YAML schema requires the field and validates it against exactly
 // those three values, so the fallthrough below is unreachable in a config-driven build and
 // exists only to fail loudly rather than guess if this method is ever called some other way.
+RadioDriver *IOHomeControlComponent::construct_dual_sx1276_() {
+  if (this->dio0_pin_ == nullptr || this->secondary_spi_ == nullptr || this->secondary_rst_pin_ == nullptr ||
+      this->secondary_dio0_pin_ == nullptr) {
+    ESP_LOGE(detail::TAG, "dual_sx1276 requires dio0_pin and a second_radio block with cs_pin, rst_pin and dio0_pin");
+    return nullptr;
+  }
+  // Allocated separately and handed over: RadioDualSX1276 owns both halves and deletes them, so
+  // the single `delete radio_` in setup() stays correct.
+  auto *primary = new (std::nothrow)
+      RadioSX1276(this, this->rst_pin_, this->dio0_pin_, this->dio4_pin_, this->tx_power_, this->pa_pin_);
+  auto *secondary =
+      new (std::nothrow) RadioSX1276(this->secondary_spi_, this->secondary_rst_pin_, this->secondary_dio0_pin_,
+                                     this->secondary_dio4_pin_, this->tx_power_, this->pa_pin_);
+  auto *radio =
+      (primary != nullptr && secondary != nullptr) ? new (std::nothrow) RadioDualSX1276(primary, secondary) : nullptr;
+  if (radio == nullptr) {
+    // Nothing took ownership, so both halves are still ours to release.
+    delete primary;
+    delete secondary;
+    ESP_LOGE(detail::TAG, "Failed to allocate dual SX1276 radio drivers");
+  }
+  return radio;
+}
+
 RadioDriver *IOHomeControlComponent::select_and_construct_radio_(const char **chip_name_out) {
   if (this->radio_type_ == "lr1121") {
     *chip_name_out = "LR1121";
@@ -160,6 +185,11 @@ RadioDriver *IOHomeControlComponent::select_and_construct_radio_(const char **ch
     if (radio == nullptr)
       ESP_LOGE(detail::TAG, "Failed to allocate SX1262 radio driver");
     return radio;
+  }
+
+  if (this->radio_type_ == "dual_sx1276") {
+    *chip_name_out = "Dual SX1276";
+    return this->construct_dual_sx1276_();
   }
 
   if (this->radio_type_ == "sx1276") {

@@ -195,6 +195,16 @@ class IOHomeControlComponent : public Component,
   void set_pa_pin(uint8_t pa_pin) { this->pa_pin_ = pa_pin; }
   /// Set radio type ("sx1276", "sx1262", or "lr1121"); required by the YAML schema.
   void set_radio_type(const std::string &type) { this->radio_type_ = type; }
+
+  /// @name Second receiver (dual-radio boards)
+  /// Set only for `radio_type: dual_sx1276`. Both radios share the hub's SPI bus; only the chip
+  /// select, reset and DIO0 lines differ, so that is all this takes.
+  ///@{
+  void set_secondary_spi(SpiAccess *spi) { this->secondary_spi_ = spi; }
+  void set_secondary_rst_pin(InternalGPIOPin *pin) { this->secondary_rst_pin_ = pin; }
+  void set_secondary_dio0_pin(InternalGPIOPin *pin) { this->secondary_dio0_pin_ = pin; }
+  void set_secondary_dio4_pin(InternalGPIOPin *pin) { this->secondary_dio4_pin_ = pin; }
+  ///@}
   /// Set TCXO voltage for SX1262/LR1121 (1.8V / 3.3V).
   void set_tcxo_voltage(uint8_t voltage) { this->tcxo_voltage_ = voltage; }
 
@@ -1020,6 +1030,14 @@ class IOHomeControlComponent : public Component,
   /// @param chip_name_out Output: human-readable chip name for logging (always set,
   ///                      even on failure, to the best-known name for error messages).
   /// @return Newly allocated RadioDriver, or nullptr if pin validation or allocation failed.
+  /// Build the two-receiver composite for `radio_type: dual_sx1276`.
+  ///
+  /// Split out of select_and_construct_radio_() to keep that dispatch readable: this branch has to
+  /// allocate three objects and unwind cleanly if any of them fails, which is a different kind of
+  /// work from choosing a driver.
+  /// @return Owning pointer to the composite, or nullptr with the reason logged.
+  RadioDriver *construct_dual_sx1276_();
+
   RadioDriver *select_and_construct_radio_(const char **chip_name_out);
 
   /// @brief Emit the 1W controller identities to the config dump — node, class, and the resolved
@@ -1059,7 +1077,11 @@ class IOHomeControlComponent : public Component,
   // --- Configuration (from YAML) ---
   std::string node_id_str_;
   std::string system_key_str_;
-  std::string radio_type_;  ///< "sx1276", "sx1262", or "lr1121"; required by the YAML schema.
+  std::string radio_type_;             ///< "sx1276", "sx1262", "lr1121", or "dual_sx1276"; required by the YAML schema.
+  SpiAccess *secondary_spi_{nullptr};  ///< Second chip select; set only for dual-radio boards.
+  InternalGPIOPin *secondary_rst_pin_{nullptr};   ///< Second radio's reset line.
+  InternalGPIOPin *secondary_dio0_pin_{nullptr};  ///< Second radio's DIO0 interrupt line.
+  InternalGPIOPin *secondary_dio4_pin_{nullptr};  ///< Second radio's optional DIO4 preamble line.
   uint8_t node_id_[NODE_ID_SIZE]{};
   uint8_t system_key_[AES_KEY_SIZE]{};
   uint8_t tx_power_{DEFAULT_TX_POWER_DBM};

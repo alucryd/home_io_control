@@ -1,0 +1,56 @@
+# Dual-SX1276 test configuration.
+#
+# Compile coverage for the two-receiver composite driver and the second SPI chip select it needs.
+# Kept as its own config rather than folded into common.yaml because `radio_type` is a single
+# choice per hub — a board is either dual or it isn't — so the two paths cannot both be exercised
+# by one hub block.
+substitutions:
+  device_name: test-esp32-dual-sx1276
+
+esphome:
+  name: ${device_name}
+
+esp32:
+  variant: esp32
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+wifi:
+  ssid: "test-ssid"
+  password: "test12345"
+
+api:
+
+spi:
+  clk_pin: 5
+  mosi_pin: 27
+  miso_pin: 19
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+home_io_control:
+  # Primary: transmits, and stays pinned to the command channel.
+  cs_pin: 18
+  rst_pin: 14
+  dio0_pin: 26
+  radio_type: dual_sx1276
+  node_id: C0FFEE
+  system_key: 0123456789ABCDEF0123456789ABCDEF
+  # Secondary: receive-only, sweeps the two channels the primary does not hold. Shares the SPI bus
+  # above; only these three lines differ.
+  second_radio:
+    cs_pin: 21
+    rst_pin: 22
+    dio0_pin: 23
+
+cover:
+  - platform: home_io_control
+    name: "Dual Test Cover"
+    io_device_id: "FEEB1E"
+    io_device_type: "roller_shutter"

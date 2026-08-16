@@ -60,6 +60,8 @@ CONF_SYSTEM_KEY = "system_key"
 CONF_TX_POWER = "tx_power"
 CONF_PA_PIN = "pa_pin"
 CONF_RADIO_TYPE = "radio_type"
+CONF_SECOND_RADIO = "second_radio"
+CONF_SECOND_RADIO_ID = "_second_radio_id"
 CONF_FEM_EN_PIN = "fem_en_pin"
 CONF_VFEM_PIN = "vfem_pin"
 CONF_FEM_PA_PIN = "fem_pa_pin"
@@ -132,6 +134,9 @@ CONF_LR1121_BOOTLOADER_SWITCH_ID = "_lr1121_bootloader_switch_id"
 home_io_control_ns = cg.esphome_ns.namespace("home_io_control")
 IOHomeControlComponent = home_io_control_ns.class_(
     "IOHomeControlComponent", cg.Component, spi.SPIDevice
+)
+RadioSecondarySpi = home_io_control_ns.class_(
+    "RadioSecondarySpi", cg.Component, spi.SPIDevice
 )
 # Hub-level "Recover System Key" switch (key extraction, key_extraction_responder.cpp /
 # platform_hub_controls.h). Deliberately NOT exposed via a `switch:` platform entry: earlier
@@ -382,10 +387,27 @@ PA_PIN_OPTIONS = {
     "RFO": 0x00,
 }
 
+# Second radio on a dual-SX1276 board. Only the chip select, reset and DIO0 lines differ — clock,
+# MOSI and MISO are the hub's own bus — so those are all this asks for. DIO4 is optional for the
+# same reason it is on the primary: it only carries preamble-detect.
+SECOND_RADIO_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(CONF_SECOND_RADIO_ID): cv.declare_id(RadioSecondarySpi),
+        cv.Required(CONF_RST_PIN): pins.internal_gpio_output_pin_schema,
+        cv.Required(CONF_DIO0_PIN): pins.internal_gpio_input_pin_schema,
+        cv.Optional(CONF_DIO4_PIN): pins.internal_gpio_input_pin_schema,
+    }
+).extend(cv.COMPONENT_SCHEMA).extend(spi.spi_device_schema(True, 8e6, "mode0"))
+
+
 RADIO_TYPE_OPTIONS = {
     "sx1276": "sx1276",
     "sx1262": "sx1262",
     "lr1121": "lr1121",
+    # Two SX1276s on one SPI bus. One is pinned to the command channel and the other sweeps the
+    # remaining two, so a reply on a channel a single receiver would have been hopping away from
+    # is still heard. See radio_dual_sx1276.h.
+    "dual_sx1276": "dual_sx1276",
 }
 
 TCXO_VOLTAGE_OPTIONS = {
@@ -1077,6 +1099,7 @@ CONFIG_SCHEMA = cv.All(
                 ONEWAY_CONTROLLER_SCHEMA
             ),
             cv.Optional(CONF_DIAGNOSTIC_PROBES, default=False): cv.boolean,
+            cv.Optional(CONF_SECOND_RADIO): SECOND_RADIO_SCHEMA,
             cv.Optional(CONF_LR1121_FIRMWARE_UPDATE): LR1121_FIRMWARE_UPDATE_SCHEMA,
             cv.Optional(tuning_module.CONF_TUNING): tuning_module.TUNING_CONFIG_SCHEMA,
         }
@@ -1142,6 +1165,19 @@ async def to_code(config):
     cg.add(var.set_pa_pin(config[CONF_PA_PIN]))
 
     cg.add(var.set_radio_type(config[CONF_RADIO_TYPE]))
+
+    if CONF_SECOND_RADIO in config:
+        second = config[CONF_SECOND_RADIO]
+        secondary = cg.new_Pvariable(second[CONF_SECOND_RADIO_ID])
+        await cg.register_component(secondary, second)
+        # Registered as its own SPI device so ESPHome drives the second chip select and keeps
+        # arbitrating the shared bus between the two radios.
+        await spi.register_spi_device(secondary, second)
+        cg.add(var.set_secondary_spi(secondary))
+        cg.add(var.set_secondary_rst_pin(await cg.gpio_pin_expression(second[CONF_RST_PIN])))
+        cg.add(var.set_secondary_dio0_pin(await cg.gpio_pin_expression(second[CONF_DIO0_PIN])))
+        if CONF_DIO4_PIN in second:
+            cg.add(var.set_secondary_dio4_pin(await cg.gpio_pin_expression(second[CONF_DIO4_PIN])))
 
     cg.add(var.set_tcxo_voltage(config[CONF_TCXO_VOLTAGE]))
 
