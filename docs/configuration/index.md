@@ -65,7 +65,7 @@ home_io_control:
 - `accept_foreign_pairing` (Optional, default: `false`): Adds a "Recover System Key" switch entity for pulling a device's system key from another controller. See [Key extraction](../key-extraction.md).
 - `scan_paired_devices_button` (Optional, default: `false`): Adds a "Scan Paired Devices" button entity — a one-tap trigger for the `scan_paired_devices` action. See
   [Scan Paired Devices](../pairing.md#scan-paired-devices).
-- `diagnostic_probes` (Optional, default: `false`): Enables the `probe_device`/`probe_sweep` actions for sending opcodes this project hasn't fully decoded yet. See
+- `diagnostic_probes` (Optional, default: `false`): Enables the `probe_device`/`probe_sweep` actions for sending opcodes this project hasn't fully decoded yet, plus "Run Probe Session"/"Stop Probe Session" buttons and a "Probe Session" sensor for walking every paired device in one capture. See
   [Diagnostic probes](../diagnostic-probes.md#calling-the-actions).
 
 ## Options every entity shares

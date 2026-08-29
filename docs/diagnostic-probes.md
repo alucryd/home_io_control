@@ -168,6 +168,55 @@ other Home Assistant traffic against this device to stall for the duration. `pro
 single index) does not have this problem; reach for `probe_sweep` only when you actually need the
 range in one gesture.
 
+### Probing every device in one gesture
+
+`probe_device` and `probe_sweep` each answer one question about one device. Characterising a whole
+installation with them means dozens of separate action calls whose replies then have to be stitched
+back together out of a log that was never captured as a single run.
+
+`diagnostic_probes: true` therefore also creates a **"Run Probe Session"** button, a **"Stop Probe
+Session"** button, and a **"Probe Session"** diagnostic text sensor. One press walks every device
+paired to this hub through
+a fixed plan of nine probes each — exactly the "Start with" values from the table above — and
+brackets the whole run in the log so one capture covers the installation:
+
+```
+===== probe_session START ===== radio=sx1276 devices=18 steps=162 (9 per device)
+probe_session [1/162] device=1F3807 probe=general_info3 index=- -> cmd=0x04 hex=...
+probe_session [2/162] device=1F3807 probe=status_ext index=0x00 -> cmd=0x04 hex=...
+...
+===== probe_session END ===== answered=97 silent=56 skipped=9 of 162 steps in 271s
+```
+
+Every line carries the `probe_session` marker, so a run greps cleanly out of a log that is also
+carrying normal traffic — which it will be, because the hub keeps operating throughout. Replies are
+additionally logged at the `io_capture` DEBUG tag like any other received frame, so with
+`logger: level: DEBUG` they paste straight into `scripts/corpus/ingest.py`.
+
+**This one does not block.** Unlike `probe_sweep`, a session is stepped from the hub loop one probe
+per pass, a second apart, so Home Assistant, OTA and every other component stay serviced for its
+whole duration. That duration is real, though: budget roughly a second per answered probe and up to
+a few seconds per silent one, so an eighteen-device installation runs for several minutes. The
+status sensor tracks it (`running 41/162`, then a final tally) so you can tell when to stop
+capturing without reading the log you are capturing.
+
+A few behaviours worth knowing:
+
+- **Real work comes first.** A session only uses genuinely idle loop passes — a cover command or a
+  due status poll is never left waiting behind it, and the session resumes when the queue drains.
+- **A device that refuses terminally is skipped, not retried.** The usual cause is the device being
+  mid-movement, which `probe_device` refuses on; the rest of that device's steps are skipped (and
+  counted as such) and the session moves to the next device. It says nothing about the others.
+- **A silent device still gets every probe.** "Nothing answered" is itself a result worth having
+  per probe.
+- **A second press of "Run" while running is refused, not a restart** — a mistimed double-click
+  cannot discard a half-captured run. "Stop Probe Session" is the way out; it takes effect at the
+  next step boundary (the probe already in flight is a blocking exchange like any other and is not
+  interrupted) and logs the end-of-session summary immediately.
+- **The plan does not widen.** It sends only the documented starting values, and there is no
+  `unknown4a` step because no such probe exists (ADR 0024). Widening remains a deliberate,
+  per-device decision via `probe_device`/`probe_sweep` — see "Widen carefully" above.
+
 ## See also
 
 - [Radio tuning](configuration/tuning.md) — the knobs to try before reaching for a probe

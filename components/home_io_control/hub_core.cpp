@@ -372,6 +372,13 @@ void IOHomeControlComponent::loop() {
     this->process_pending_operation_();
   }
 
+  // One diagnostic probe per pass, at most. A session covers every registered device and runs for
+  // minutes; spreading it a step at a time is what keeps that from being minutes of frozen loop.
+  // It yields to the operation queue internally, so it only ever uses genuinely idle passes.
+  if (!this->busy_) {
+    this->advance_probe_session_();
+  }
+
   // Frequency hopping — protocol specifies 2.7ms per channel, but ESPHome calls
   // loop() every ~16-30ms. This is acceptable for a controller: a directed start frame to a
   // low-power target still goes out with LONG_PREAMBLE (1024 bytes ≈ 330ms airtime), long enough

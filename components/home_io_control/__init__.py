@@ -130,6 +130,12 @@ CONF_SCAN_PAIRED_DEVICES_BUTTON_ID = "_scan_paired_devices_button_id"
 # (injected by post-validator; same rationale as CONF_ACCEPT_FOREIGN_PAIRING_SWITCH_ID above --
 # only present when lr1121_firmware_update.bootloader: is configured).
 CONF_LR1121_BOOTLOADER_SWITCH_ID = "_lr1121_bootloader_switch_id"
+# Internal config keys for the "Run Probe Session" companion button and its progress text sensor
+# (injected by post-validator; same rationale as CONF_ACCEPT_FOREIGN_PAIRING_SWITCH_ID above --
+# only present when diagnostic_probes: true).
+CONF_PROBE_SESSION_BUTTON_ID = "_probe_session_button_id"
+CONF_PROBE_SESSION_STOP_BUTTON_ID = "_probe_session_stop_button_id"
+CONF_PROBE_SESSION_SENSOR_ID = "_probe_session_sensor_id"
 
 home_io_control_ns = cg.esphome_ns.namespace("home_io_control")
 IOHomeControlComponent = home_io_control_ns.class_(
@@ -202,6 +208,49 @@ ONEWAY_COMMANDS = {
 IOHomeLr1121BootloaderRewriteSwitch = home_io_control_ns.class_(
     "IOHomeLr1121BootloaderRewriteSwitch", switch_component.Switch, cg.Component
 )
+# Hub-level "Run Probe Session" button and its companion progress sensor
+# (hub_probe_session.cpp / platform_probe_session_button.h /
+# platform_probe_session_text_sensor.h). Created only for `diagnostic_probes: true`, the same
+# "an opt-in feature's entities exist only when the feature does" shape as the LR1121 flash
+# button above -- a build that never opted in should not carry a button that can only refuse.
+IOHomeProbeSessionButton = home_io_control_ns.class_(
+    "IOHomeProbeSessionButton", button_component.Button, cg.Component
+)
+IOHomeProbeSessionStopButton = home_io_control_ns.class_(
+    "IOHomeProbeSessionStopButton", button_component.Button, cg.Component
+)
+IOHomeProbeSessionTextSensor = home_io_control_ns.class_(
+    "IOHomeProbeSessionTextSensor", text_sensor_component.TextSensor, cg.Component
+)
+
+
+def _inject_probe_session_entity_ids(config):
+    """Declare the probe-session button/sensor IDs during schema validation.
+
+    Same ESPHome 2026.x constraint as every other companion here: a component ID created only in
+    to_code() is not counted when the runtime component vector is sized, and silently drops --
+    see CONF_ACCEPT_FOREIGN_PAIRING_SWITCH_ID's comment above.
+    """
+    if not config[CONF_DIAGNOSTIC_PROBES]:
+        return config
+    parent_id = config[CONF_ID]
+    base = parent_id.id if parent_id.id else "home_io_control"
+    config[CONF_PROBE_SESSION_BUTTON_ID] = ID(
+        f"{base}_probe_session_button",
+        is_declaration=True,
+        type=IOHomeProbeSessionButton,
+    )
+    config[CONF_PROBE_SESSION_STOP_BUTTON_ID] = ID(
+        f"{base}_probe_session_stop_button",
+        is_declaration=True,
+        type=IOHomeProbeSessionStopButton,
+    )
+    config[CONF_PROBE_SESSION_SENSOR_ID] = ID(
+        f"{base}_probe_session_sensor",
+        is_declaration=True,
+        type=IOHomeProbeSessionTextSensor,
+    )
+    return config
 
 
 def _inject_hub_entity_id(config, *, flag_key, id_key, suffix, cls):
@@ -1109,6 +1158,7 @@ CONFIG_SCHEMA = cv.All(
     _inject_accept_foreign_pairing_switch_id,
     _inject_recover_oneway_key_switch_id,
     _inject_scan_paired_devices_button_id,
+    _inject_probe_session_entity_ids,
     _validate_oneway_controllers,
     _validate_lr1121_firmware_update,
 )
@@ -1214,6 +1264,8 @@ async def to_code(config):
         await _create_scan_paired_devices_button(config, var)
 
     cg.add(var.set_diagnostic_probes_enabled(config[CONF_DIAGNOSTIC_PROBES]))
+    if config[CONF_DIAGNOSTIC_PROBES]:
+        await _create_probe_session_entities(config, var)
 
     if CONF_LR1121_FIRMWARE_UPDATE in config:
         await _create_lr1121_firmware_update(config, var)
@@ -1291,6 +1343,46 @@ async def _create_oneway_controller_entities(identity, var):
         await cg.register_component(enroll_entity, enroll_config)
         cg.add(enroll_entity.set_parent(var))
         cg.add(enroll_entity.set_controller_id(identity[CONF_ID]))
+
+
+async def _create_probe_session_entities(config, var):
+    """Create the probe-session start/stop buttons and the progress text sensor.
+
+    Same normalization as _create_hub_arming_switch() below: run a bare {id, name} dict through the
+    platform's own schema so it carries the entity/component defaults register_*() require.
+
+    No restore-mode question to answer, unlike the arming switches -- a button has no state to come
+    back in, and the session it starts exists only for the boot that runs it.
+    """
+    for cls, id_key, name in (
+        (IOHomeProbeSessionButton, CONF_PROBE_SESSION_BUTTON_ID, "Run Probe Session"),
+        (IOHomeProbeSessionStopButton, CONF_PROBE_SESSION_STOP_BUTTON_ID, "Stop Probe Session"),
+    ):
+        button_config = button_component.button_schema(
+            cls,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+        ).extend(cv.COMPONENT_SCHEMA)(
+            {
+                CONF_ID: config[id_key],
+                CONF_NAME: name,
+            }
+        )
+        entity = await button_component.new_button(button_config)
+        await cg.register_component(entity, button_config)
+        cg.add(entity.set_parent(var))
+
+    sensor_config = text_sensor_component.text_sensor_schema(
+        IOHomeProbeSessionTextSensor,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ).extend(cv.COMPONENT_SCHEMA)(
+        {
+            CONF_ID: config[CONF_PROBE_SESSION_SENSOR_ID],
+            CONF_NAME: "Probe Session",
+        }
+    )
+    sensor = await text_sensor_component.new_text_sensor(sensor_config)
+    await cg.register_component(sensor, sensor_config)
+    cg.add(sensor.set_parent(var))
 
 
 async def _create_hub_arming_switch(config, var, *, cls, id_key, name):

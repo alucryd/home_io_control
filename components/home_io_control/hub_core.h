@@ -44,6 +44,7 @@
 #include "pairing_engine.h"
 #include "management_actions.h"
 #include "key_extraction_responder.h"
+#include "probe_session.h"
 #include "oneway_controller.h"
 #include "oneway_transmitter.h"
 #include "oneway_key_adoption.h"
@@ -684,6 +685,42 @@ class IOHomeControlComponent : public Component,
   /// Blocks the ESPHome loop for roughly 3 x `pairing_discovery_wait_ms` and will log the
   /// "operation took a long time" warning, same as the action — see docs/pairing.md.
   void trigger_scan_paired_devices();
+
+  /// @brief Start a diagnostic probe session over every registered device.
+  ///
+  /// Builds ProbeSession's fixed plan for the whole registry and arms it; loop() then executes one
+  /// probe per pass. Returns as soon as the plan is built — the run itself takes minutes, and its
+  /// output is the log, delimited by `PROBE SESSION START`/`END` lines so one capture covers the
+  /// whole installation. Progress is also published to the "Probe Session" text sensor when one is
+  /// configured.
+  ///
+  /// Refuses (returning false, with a logged reason) when this build did not opt in via
+  /// `diagnostic_probes: true`, when no devices are registered, or when a session is already
+  /// running — a second press is a no-op, not a restart, so a mistimed double-click cannot discard
+  /// a run that is already half-captured.
+  ///
+  /// Virtual so platform unit tests can substitute a mock hub, matching every other
+  /// queue_*/set_* entry point on this component.
+  /// @return true if a session was started.
+  virtual bool start_probe_session();
+
+  /// @brief Stop a running probe session at the next step boundary.
+  ///
+  /// The step already in flight is not interrupted — it is a blocking exchange like any other —
+  /// but no further step is sent and the end-of-session summary is logged immediately. No-op when
+  /// no session is running.
+  virtual void abort_probe_session();
+
+  /// @return The probe session's plan and progress; readable whether or not one is running.
+  [[nodiscard]] const ProbeSession &probe_session() const { return this->probe_session_; }
+
+  /// Register a callback invoked whenever a probe session's progress changes — start, each
+  /// completed step, and end — so the "Probe Session" text sensor can track a run that lasts
+  /// minutes. Single-slot, mirrors set_pairing_result_callback().
+  /// @param cb Callable receiving a short human-readable status string.
+  void set_probe_session_status_callback(std::function<void(const std::string &)> cb) {
+    this->probe_session_status_callback_ = std::move(cb);
+  }
   /// Async form of set_light_position() that keeps radio work serialized on the main loop.
   /// queue_set_light_state() is a thin binary-position wrapper around this.
   /// @param device_id Target device ID.
@@ -1103,6 +1140,20 @@ class IOHomeControlComponent : public Component,
   /// False by default so a build that didn't opt in via `diagnostic_probes: true` never sends an
   /// undecoded probe opcode. See set_diagnostic_probes_enabled().
   bool diagnostic_probes_enabled_{false};
+  /// Plan and cursor for a running diagnostic probe session; see start_probe_session().
+  ProbeSession probe_session_;
+  /// millis() when the last probe step finished, for STEP_DELAY_MS pacing.
+  uint32_t probe_session_last_step_ms_{0};
+  /// millis() when the running session started, for the elapsed time in its end summary.
+  uint32_t probe_session_started_ms_{0};
+  /// Invoked on every probe-session progress change; see set_probe_session_status_callback().
+  std::function<void(const std::string &)> probe_session_status_callback_;
+  /// @brief Execute at most one probe step, if one is due. Called from loop().
+  void advance_probe_session_();
+  /// @brief Log the end-of-session summary and publish the final status.
+  void finish_probe_session_();
+  /// @brief Push @p status to the session status callback, if one is registered.
+  void publish_probe_session_status_(const std::string &status);
   StatusPollPolicy poll_policy_;
   OperationQueue op_queue_;
   PairingTelemetry pairing_telemetry_;  ///< Per-attempt pairing telemetry, shared with ExchangeEngine/PairingEngine.
