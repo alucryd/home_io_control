@@ -23,8 +23,15 @@
 <!--BEGIN !PROJECT_NAME--><title>$title</title><!--END !PROJECT_NAME-->
 <link href="$relpath^tabs.css" rel="stylesheet" type="text/css"/>
 <!--<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>-->
-<script type="text/javascript" src="$relpath^jquery.js"></script>
+<!-- doxygen-awesome-css v2.4.2 still calls `$` in three of its scripts; jquery-shim.js is a
+     ~1 KB vanilla stand-in for the patterns it uses (see the file). Not jQuery. -->
+<script type="text/javascript" src="$relpath^jquery-shim.js"></script>
 <script type="text/javascript" src="$relpath^dynsections.js"></script>
+<!-- doxygen >= 1.17 emits `codefold.init` in every page body; this custom header (older than
+     that) must load its script or the page throws a ReferenceError. HTML_COPY_CLIPBOARD is set
+     to NO in the Doxyfile so doxygen's own copy button (clipboard.js) does not double up with
+     doxygen-awesome-fragment-copy-button.js below. -->
+<script type="text/javascript" src="$relpath^codefolding.js"></script>
 <script type="text/javascript" src="$relpath^doxygen-awesome-darkmode-toggle.js"></script>
 <script type="text/javascript" src="$relpath^doxygen-awesome-fragment-copy-button.js"></script>
 <script type="text/javascript" src="$relpath^doxygen-awesome-paragraph-link.js"></script>
@@ -37,6 +44,11 @@
     DoxygenAwesomeInteractiveToc.init()
     DoxygenAwesomeTabs.init()
 </script>
+<!-- Mermaid: doxygen injects an "import mermaid from MERMAID_JS_URL; mermaid.initialize(...)"
+     module into every page regardless of this header. MERMAID_JS_URL points at mermaid-lazy.mjs,
+     a small shim that satisfies that call but only fetches the real ~3.5 MB bundle on pages
+     that actually carry a diagram. -->
+$mermaidjs
 $treeview
 $search
 $mathjax

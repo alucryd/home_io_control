@@ -1,4 +1,5 @@
 # YAML Configuration
+<!-- doxygen-label: guide_setup -->
 
 This page documents the YAML configuration for the `home_io_control` external component and its ESPHome platforms.
 
@@ -875,10 +876,10 @@ button:
 
 For larger working examples, see the configs already in this repo:
 
-- [config/heltec-wifi-lora-32-v2.yaml](../config/heltec-wifi-lora-32-v2.yaml): SX1276 Heltec LoRa32 V2 controller config with one awning cover, a Discover & Pair button, and an OLED status display that shows recent activity.
-- [config/heltec-wifi-lora-32-v2-all-types.yaml](../config/heltec-wifi-lora-32-v2-all-types.yaml): SX1276 Heltec LoRa32 V2 controller config without OLED support that exercises every currently supported ESPHome platform in this component: cover, light, lock, switch, and the Discover & Pair button, all with dummy device IDs ready to replace.
-- [config/heltec-wifi-lora-32-v3.yaml](../config/heltec-wifi-lora-32-v3.yaml): SX1262 Heltec WiFi LoRa32 V3/V3.2 controller config with one awning cover, a Discover & Pair button, and an OLED status display tuned for the V3 pinout and TCXO settings.
-- [config/heltec-wifi-lora-32-v3-monitor.yaml](../config/heltec-wifi-lora-32-v3-monitor.yaml): SX1262 passive monitor config for Heltec WiFi LoRa32 V3/V3.2 that keeps the radio in RX, enables `IOHOME_FRAME_LOG`, and logs parsed traffic without creating entities or exposing a pairing button.
+- [config/heltec-wifi-lora-32-v2.yaml](https://github.com/laberning/home_io_control/blob/main/config/heltec-wifi-lora-32-v2.yaml): SX1276 Heltec LoRa32 V2 controller config with one awning cover, a Discover & Pair button, and an OLED status display that shows recent activity.
+- [config/heltec-wifi-lora-32-v2-all-types.yaml](https://github.com/laberning/home_io_control/blob/main/config/heltec-wifi-lora-32-v2-all-types.yaml): SX1276 Heltec LoRa32 V2 controller config without OLED support that exercises every currently supported ESPHome platform in this component: cover, light, lock, switch, and the Discover & Pair button, all with dummy device IDs ready to replace.
+- [config/heltec-wifi-lora-32-v3.yaml](https://github.com/laberning/home_io_control/blob/main/config/heltec-wifi-lora-32-v3.yaml): SX1262 Heltec WiFi LoRa32 V3/V3.2 controller config with one awning cover, a Discover & Pair button, and an OLED status display tuned for the V3 pinout and TCXO settings.
+- [config/heltec-wifi-lora-32-v3-monitor.yaml](https://github.com/laberning/home_io_control/blob/main/config/heltec-wifi-lora-32-v3-monitor.yaml): SX1262 passive monitor config for Heltec WiFi LoRa32 V3/V3.2 that keeps the radio in RX, enables `IOHOME_FRAME_LOG`, and logs parsed traffic without creating entities or exposing a pairing button.
 
 **These files are not standalone.** Each one pulls its board's SPI bus and radio pin
 assignment from a package:
@@ -888,7 +889,7 @@ packages:
   board: !include boards/heltec-v3.yaml
 ```
 
-The per-board pinouts live once in [config/boards/](../config/boards/) —
+The per-board pinouts live once in [config/boards/](https://github.com/laberning/home_io_control/tree/main/config/boards) —
 `heltec-v2.yaml`, `heltec-v3.yaml`, `t3s3.yaml`. To reuse one
 of the configs above, copy the whole `config/` directory (or at least the matching
 `config/boards/*.yaml` alongside the file you took), or replace the `packages:` line with the full
@@ -1677,7 +1678,7 @@ on releases that didn't exist when it was written.
 
 > **⚠️ This one is a one-way door.** A failed bootloader write has **no recovery path in this
 > project** — see the risk table above for why. Mains power only, and don't interrupt it. Read
-> [ADR 0021](https://github.com/laberning/home_io_control/blob/main/docs/adr/0021-flash-the-lr1121-bootloader-behind-an-arming-switch.md)
+> [ADR 0021](adr/0021-flash-the-lr1121-bootloader-behind-an-arming-switch.md)
 > before configuring this.
 
 **Why you might want to.** Semtech's advisory SEM-PSA-2026-001 lists three CVEs affecting the

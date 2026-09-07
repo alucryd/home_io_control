@@ -251,11 +251,13 @@ class SoftPhyDriverBase : public RadioDriver {
   /// activity would tear down RX mid-reception.
   [[nodiscard]] virtual uint32_t activity_irq_mask() const { return SOFT_PHY_ALL_IRQ_BITS; }
 
+  // `SOFT_PHY_RX_PROBE_PACKET_LEN` below is a code span, not \ref: doxygen 1.18 can't resolve
+  // \ref to it in a whole-project build (details in proto_sizes.h). Autolinking still links it.
   /// @brief Data-buffer offset an in-flight reception is being written to, or a negative value
   /// when this chip must not be read before RX_DONE.
   ///
   /// Neither chip's RX_DONE marks the end of the *frame*: with no hardware framing, RX runs in
-  /// fixed-length mode at @ref SOFT_PHY_RX_PROBE_PACKET_LEN, so RX_DONE arrives a fixed ~10 ms
+  /// fixed-length mode at `SOFT_PHY_RX_PROBE_PACKET_LEN`, so RX_DONE arrives a fixed ~10 ms
   /// after the sync word no matter how short the frame actually was. That delay lands squarely on
   /// the protocol's tightest turnaround — the hub's reply to a device's challenge — so a driver
   /// that can read its buffer while reception is still running opts in here and the shared flow

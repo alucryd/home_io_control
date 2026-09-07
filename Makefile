@@ -159,8 +159,9 @@ check-build-cache:
 
 # Cross-file check: every relative markdown link across tracked docs must resolve.
 docs-link-check:
-	@echo "Checking documentation cross-links..."
+	@echo "Checking documentation cross-links and staging invariants..."
 	@python3 scripts/check-docs-links.py
+	@python3 scripts/check_docs_links_test.py
 
 # Wipes config/tests/.esphome/build/<env>/ for every config/tests/test-*.yaml config (the ones
 # make clang-tidy / firmware-test / check build against), plus config/tests/.esphome/storage/
